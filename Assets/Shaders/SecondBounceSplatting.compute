@@ -1,0 +1,57 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel SplattingMain
+
+// Structure representing a virtual point light source
+struct VPL
+{
+	float3 color;
+	float3 position;
+	float3 normal;
+};
+
+// Readable/Writable structured buffer for virtual point lights
+RWStructuredBuffer<VPL>		_VPLBuffer;
+
+// Texture for storing the light colors from the first bounce VPLs
+Texture2D<float4>			_LightColorsTexture;
+
+// Texture for storing the color with direct lighting
+Texture2D<float4>			_DirectLightingTexture;
+
+// Texture for storing the world position
+Texture2D<float4>			_PositionTexture;
+
+// Texture for storing the world normal
+Texture2D<float4>			_NormalTexture;
+
+// Value for the world boundary to extract the world position
+float						_WorldVolumeBoundary;
+
+// Value for width of the textures
+uint						_RenderSize;
+
+[numthreads(1, 1, 1)]
+void SplattingMain(uint3 id : SV_DispatchThreadID)
+{
+	// Color of the current pixel with direct lighting
+	float4 directLightingColor = _DirectLightingTexture[id.xy];
+
+	float4 lightColor = _LightColorsTexture[id.xy];
+
+	// This world position is between 0...1
+	float3 worldPosition = _PositionTexture[id.xy].rgb;
+	worldPosition *= (2.0 * _WorldVolumeBoundary);
+	worldPosition -= _WorldVolumeBoundary;
+
+	float3 worldNormal = _NormalTexture[id.xy].rgb;
+	worldNormal -= 0.5;
+	worldNormal *= 2.0;
+
+	// Calculate the index of the vpl buffer array
+	uint index = ((_RenderSize * id.x) + id.y);
+
+	// Set the current VPL's data in the buffer
+	_VPLBuffer[index].color = (directLightingColor.rgb * lightColor.rgb);
+	_VPLBuffer[index].position = worldPosition;
+	_VPLBuffer[index].normal = worldNormal;
+}
